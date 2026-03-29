@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nexus-Q — Neural Control Orbit</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Outfit:wght@300;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <canvas id="field" aria-hidden="true"></canvas>
+  <div class="noise" aria-hidden="true"></div>
+
+  <header class="top-bar">
+    <div class="brand">
+      <span class="brand-mark"></span>
+      <div>
+        <h1>Nexus-Q</h1>
+        <p class="tagline">Autonomous LLM control plane · RL · Digital twin · Quantum tie-break</p>
+      </div>
+    </div>
+    <div class="status-pill" id="connStatus">
+      <span class="dot"></span>
+      <span id="connLabel">Idle</span>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="panel prompt-panel">
+      <h2>Your prompt</h2>
+      <p class="hint"><strong>Corpus simulation:</strong> leave empty → <strong>Launch simulation</strong> (built-in prompts; <strong>no external API calls</strong>, fully simulated). <strong>Your text:</strong> enter a prompt → the routed provider calls the real LLM if that provider’s API key is set in <code>.env</code>, and <strong>Model output</strong> shows the response. Launch repeats for the full <strong>Requests</strong> count unless <em>Single request</em> is checked; <strong>Send prompt</strong> = one step.</p>
+      <div class="prompt-input-row">
+        <textarea id="userPrompt" class="prompt-textarea" rows="4" placeholder="Example: Design a fault-tolerant inference gateway with SLA-aware provider failover…"></textarea>
+        <button type="button" class="btn primary btn-send" id="btnSendPrompt">Send prompt</button>
+      </div>
+      <p class="kbd-hint"><kbd>Ctrl</kbd> + <kbd>Enter</kbd> sends from the text box.</p>
+      <label class="checkbox-row">
+        <input type="checkbox" id="routeOnce" />
+        <span>Single request when launching — with your text in the box, <strong>Launch simulation</strong> runs only one step (otherwise it repeats your prompt(s) for the full <strong>Requests</strong> count for stress / RL). <strong>Send prompt</strong> is always one step.</span>
+      </label>
+      <div class="routing-result" id="routingResult" aria-live="polite">
+        <div class="routing-result-label">Chosen model</div>
+        <div class="routing-model-name" id="chosenModelName">—</div>
+        <p class="routing-reason" id="chosenModelReason" hidden></p>
+      </div>
+      <div class="prompt-row">
+        <div class="field-inline auto-priority-display">
+          <span>Priority</span>
+          <span class="auto-priority-badge" id="autoPriorityBadge" title="Priority is auto-detected by the ML classifier based on prompt content">Auto-detect</span>
+          <span class="auto-priority-conf" id="autoPriorityConf"></span>
+        </div>
+        <fieldset class="mode-toggle">
+          <legend class="mode-legend">Text mode</legend>
+          <label class="radio-label"><input type="radio" name="promptMode" value="single" checked /> Single block</label>
+          <label class="radio-label"><input type="radio" name="promptMode" value="lines" /> One prompt per line</label>
+        </fieldset>
+      </div>
+    </section>
+
+    <section class="panel orbit-panel">
+      <h2>Model orbit</h2>
+      <p class="hint">The highlighted node is the model endpoint selected for the current step.</p>
+      <div class="orbit-wrap">
+        <svg id="orbitSvg" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="var(--accent)" stop-opacity="0.35" />
+              <stop offset="100%" stop-color="var(--accent-2)" stop-opacity="0.15" />
+            </linearGradient>
+            <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="3" result="b" />
+              <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+            </filter>
+          </defs>
+          <circle cx="200" cy="200" r="140" fill="none" stroke="url(#ringGrad)" stroke-width="1" class="orbit-ring" />
+          <circle cx="200" cy="200" r="90" fill="none" stroke="rgba(0,245,212,0.12)" stroke-width="1" stroke-dasharray="4 8" />
+          <g id="orbitNodes"></g>
+        </svg>
+        <div class="orbit-center-stack">
+          <span class="orbit-micro-label">Active</span>
+          <div class="orbit-center" id="orbitCenter" title="">—</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel explain-panel" id="explainPanel" aria-label="Explainability flight recorder">
+      <div class="explain-header">
+        <span class="explain-rec" aria-hidden="true"></span>
+        <h2>Explainability <span class="explain-sub">/ FDR</span></h2>
+        <span class="quantum-badge" id="quantumBadge" data-active="false">Quantum randomization</span>
+      </div>
+      <p class="hint">Most recent routing decision — state, SLA blocks, Q-values, quantum tie-break.</p>
+      <div class="explain-grid">
+        <div class="explain-card">
+          <h3>State vector</h3>
+          <dl class="explain-dl">
+            <dt>Prompt complexity</dt>
+            <dd id="expComplexity">—</dd>
+            <dt>Provider health</dt>
+            <dd><ul class="explain-ul" id="expHealth"></ul></dd>
+            <dt>Latency history</dt>
+            <dd><ul class="explain-ul" id="expLatency"></ul></dd>
+          </dl>
+        </div>
+        <div class="explain-card">
+          <h3>Blocked providers</h3>
+          <ul class="explain-blocks" id="expBlocked"><li class="dim">None</li></ul>
+        </div>
+        <div class="explain-card explain-card-wide">
+          <h3>Q-values (RL)</h3>
+          <div class="q-chart" id="expQChart"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel controls-panel">
+      <h2>Mission control</h2>
+      <div class="control-grid">
+        <label class="field">
+          <span>Requests</span>
+          <input type="range" id="reqSlider" min="5" max="120" value="50" />
+          <output id="reqOut">50</output>
+        </label>
+        <label class="field">
+          <span>Daily budget ($)</span>
+          <input type="range" id="budgetSlider" min="0.1" max="5" step="0.05" value="1" />
+          <output id="budgetOut">1.00</output>
+        </label>
+        <label class="field">
+          <span>Visual step delay (ms)</span>
+          <input type="range" id="delaySlider" min="0" max="80" value="12" />
+          <output id="delayOut">12</output>
+        </label>
+      </div>
+      <div class="actions">
+        <button type="button" class="btn primary" id="btnLaunch">Launch simulation</button>
+        <button type="button" class="btn ghost" id="btnStop" disabled>Abort</button>
+      </div>
+      <div class="progress-wrap">
+        <div class="progress-bar" id="progressBar"></div>
+        <span class="progress-text" id="progressText">0 / 0</span>
+      </div>
+      <div class="metrics-row" id="liveMetrics">
+        <div class="metric"><span class="m-label">ε</span><span class="m-val" id="mEps">—</span></div>
+        <div class="metric"><span class="m-label">Budget left</span><span class="m-val" id="mBudget">—</span></div>
+        <div class="metric"><span class="m-label">Reward</span><span class="m-val" id="mReward">—</span></div>
+        <div class="metric"><span class="m-label">Latency</span><span class="m-val" id="mLat">—</span></div>
+      </div>
+    </section>
+
+    <section class="panel stream-panel">
+      <h2>Event stream</h2>
+      <div class="llm-output-panel" id="llmOutputPanel" aria-live="polite">
+        <div class="llm-output-header">
+          <span class="llm-output-label">Model output</span>
+          <span class="llm-output-meta" id="llmOutputMeta"></span>
+        </div>
+        <pre class="llm-output-body" id="llmOutputBody">Run a simulation or send a prompt to see the model response here.</pre>
+      </div>
+      <div class="stream-toolbar">
+        <button type="button" class="chip" id="btnClear">Clear</button>
+        <span class="chip dim" id="spikeBadge">Spike window: 25–39</span>
+      </div>
+      <ol class="event-stream" id="eventStream" aria-live="polite"></ol>
+    </section>
+
+    <section class="panel summary-panel" id="summaryPanel" hidden>
+      <h2>Run summary</h2>
+      <pre class="summary-pre" id="summaryPre"></pre>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <kbd>Space</kbd> launch (not in text fields) · <kbd>Esc</kbd> abort · Nexus-Q · <code>/ws/simulate</code>
+  </footer>
+
+  <script type="module" src="/static/app.js"></script>
+</body>
+</html>

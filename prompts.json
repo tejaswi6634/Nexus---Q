@@ -1,0 +1,22 @@
+[
+  "What is the capital of France?",
+  "Write a Python function for binary search with edge-case handling",
+  "Draft a GDPR compliance review for our data-pipeline architecture",
+  "Design a microservices architecture for an e-commerce platform with event sourcing and CQRS",
+  "Tell me a creative story about space exploration and alien civilizations",
+  "Explain quantum computing basics and qubit entanglement",
+  "Review this contract clause for legal compliance with international trade law",
+  "Optimize this SQL query for better performance across partitioned tables",
+  "Write a poem about artificial intelligence and the future of humanity",
+  "Implement a distributed consensus algorithm with Byzantine fault tolerance",
+  "What is machine learning?",
+  "Create a comprehensive security audit framework for a multi-cloud Kubernetes deployment",
+  "How do neural networks learn from data?",
+  "Draft an intellectual property licensing agreement for our open-source project",
+  "Build a real-time recommendation engine with collaborative filtering",
+  "Write a haiku about programming",
+  "Explain the CAP theorem and its implications for distributed databases",
+  "Design an end-to-end MLOps pipeline with model versioning and canary deployments",
+  "What are the current CCPA regulations for handling consumer personal data?",
+  "Implement a custom memory allocator with garbage collection for a language runtime"
+]
